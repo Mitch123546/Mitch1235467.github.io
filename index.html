@@ -3,390 +3,54 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pokédex Explorer</title>
+  <title>Endless Color Shuffle</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="page-header">
-    <div class="header-content">
-      <h1>Pokédex Explorer</h1>
-      <p>Select a letter to browse Pokémon in alphabetical order. Click a Pokémon to learn more about it.</p>
-    </div>
-  </header>
-
-  <main>
-    <section class="alphabet-filter" aria-label="Alphabetical filter">
-      <div class="letter-list" id="letter-list"></div>
-    </section>
-
-    <section class="status" aria-live="polite">
-      <p id="status-message">Loading Pokédex data…</p>
-    </section>
-
-    <section class="pokemon-grid" id="pokemon-grid" aria-live="polite" aria-busy="true"></section>
+  <main class="wrapper">
+    <header class="intro">
+      <h1>Endless Color Shuffle</h1>
+      <p>Enjoy a living mosaic of 10,000 tiles, each refreshing to a new hue every fraction of a second.</p>
+    </header>
+    <div class="grid" id="color-grid" role="grid" aria-label="Endlessly animating color grid"></div>
   </main>
-
-  <div class="modal" id="pokemon-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
-    <div class="modal-backdrop" id="modal-backdrop"></div>
-    <div class="modal-dialog">
-      <button class="modal-close" id="modal-close" aria-label="Close details">&times;</button>
-      <div class="modal-content">
-        <img id="modal-image" src="" alt="" />
-        <div class="modal-text">
-          <h2 id="modal-title"></h2>
-          <p id="modal-description"></p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <template id="pokemon-card-template">
-    <article class="pokemon-card">
-      <button type="button" class="card-button">
-        <img loading="lazy" />
-        <span class="pokemon-name"></span>
-      </button>
-    </article>
-  </template>
-
   <script>
-    const DATA_SOURCES = [
-      'https://nationalpokedex.github.io/pokedex.json',
-      'https://nationalpokedex.github.io/pokemon.json',
-      'https://nationalpokedex.github.io/data/pokedex.json',
-      'https://nationalpokedex.github.io/api/pokedex.json'
-    ];
+    const GRID_SIZE = 100;
+    const MIN_DELAY = 10; // 0.01 seconds
+    const MAX_DELAY = 1000; // 1 second
 
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-    const letterList = document.getElementById('letter-list');
-    const pokemonGrid = document.getElementById('pokemon-grid');
-    const statusMessage = document.getElementById('status-message');
-    const cardTemplate = document.getElementById('pokemon-card-template');
+    const grid = document.getElementById('color-grid');
+    grid.style.setProperty('--grid-size', GRID_SIZE);
 
-    const modal = document.getElementById('pokemon-modal');
-    const modalBackdrop = document.getElementById('modal-backdrop');
-    const modalClose = document.getElementById('modal-close');
-    const modalImage = document.getElementById('modal-image');
-    const modalTitle = document.getElementById('modal-title');
-    const modalDescription = document.getElementById('modal-description');
-
-    let allPokemon = [];
-    let currentLetter = 'A';
-
-    function renderLetters() {
-      letters.forEach(letter => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'letter-button';
-        button.textContent = letter;
-        button.setAttribute('aria-label', `Show Pokémon starting with ${letter}`);
-        button.addEventListener('click', () => {
-          currentLetter = letter;
-          updateLetterSelection();
-          renderPokemon();
-        });
-        letterList.appendChild(button);
-      });
-      updateLetterSelection();
+    function randomColor() {
+      const hue = Math.floor(Math.random() * 360);
+      const saturation = 60 + Math.random() * 40; // 60% - 100%
+      const lightness = 40 + Math.random() * 30; // 40% - 70%
+      return `hsl(${hue} ${saturation}% ${lightness}%)`;
     }
 
-    function updateLetterSelection() {
-      const buttons = letterList.querySelectorAll('.letter-button');
-      buttons.forEach(btn => {
-        const isActive = btn.textContent === currentLetter;
-        btn.classList.toggle('active', isActive);
-        btn.setAttribute('aria-pressed', isActive);
-      });
+    function scheduleColorUpdate(cell) {
+      const delay = Math.random() * (MAX_DELAY - MIN_DELAY) + MIN_DELAY;
+      setTimeout(() => {
+        cell.style.backgroundColor = randomColor();
+        scheduleColorUpdate(cell);
+      }, delay);
     }
 
-    function renderPokemon() {
-      pokemonGrid.innerHTML = '';
-      pokemonGrid.setAttribute('aria-busy', 'true');
-
-      const filtered = allPokemon.filter(({ name }) => name.toUpperCase().startsWith(currentLetter));
-      if (filtered.length === 0) {
-        statusMessage.textContent = `No Pokémon found for the letter ${currentLetter}.`;
-        pokemonGrid.setAttribute('aria-busy', 'false');
-        return;
-      }
-
-      statusMessage.textContent = `Showing ${filtered.length} Pokémon starting with ${currentLetter}.`;
-
-      const fragment = document.createDocumentFragment();
-      filtered.forEach(pokemon => {
-        const card = cardTemplate.content.firstElementChild.cloneNode(true);
-        const button = card.querySelector('.card-button');
-        const img = card.querySelector('img');
-        const nameEl = card.querySelector('.pokemon-name');
-
-        nameEl.textContent = pokemon.name;
-        img.src = pokemon.image;
-        img.alt = `${pokemon.name}`;
-
-        button.addEventListener('click', () => showPokemonDetails(pokemon));
-
-        fragment.appendChild(card);
-      });
-
-      pokemonGrid.appendChild(fragment);
-      pokemonGrid.setAttribute('aria-busy', 'false');
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < GRID_SIZE * GRID_SIZE; i += 1) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      fragment.appendChild(cell);
     }
 
-    function showPokemonDetails(pokemon) {
-      modalImage.src = pokemon.imageLarge || pokemon.image;
-      modalImage.alt = pokemon.name;
-      modalTitle.textContent = pokemon.name;
-      modalDescription.textContent = pokemon.description || 'No description available from nationalpokedex.github.io.';
+    grid.appendChild(fragment);
 
-      modal.hidden = false;
-      document.body.classList.add('modal-open');
-      modalClose.focus();
-    }
-
-    function closeModal() {
-      modal.hidden = true;
-      document.body.classList.remove('modal-open');
-    }
-
-    modalBackdrop.addEventListener('click', closeModal);
-    modalClose.addEventListener('click', closeModal);
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && !modal.hidden) {
-        closeModal();
-      }
+    const cells = Array.from(grid.children);
+    cells.forEach(cell => {
+      cell.style.backgroundColor = randomColor();
+      scheduleColorUpdate(cell);
     });
-
-    function normalisePokemon(entry, index) {
-      let name = pickFirstString(entry, [
-        'name',
-        'pokemon',
-        'pokemon_name',
-        'Pokemon',
-        'species',
-        'title'
-      ]);
-
-      if (!name && entry.names && typeof entry.names === 'object') {
-        name = pickFirstString(entry.names, ['english', 'en', 'default', 'name']);
-      }
-
-      if (!name) {
-        return null;
-      }
-
-      const sprite = pickSprite(entry);
-      if (!sprite) {
-        return null;
-      }
-
-      const id = pickFirstValue(entry, [
-        'national_dex',
-        'nationalDex',
-        'nationalDexNumber',
-        'dexNumber',
-        'pokedexNumber',
-        'number',
-        'id',
-        'slug'
-      ]) || index;
-
-      const description = pickFirstString(entry, [
-        'description',
-        'info',
-        'about',
-        'bio',
-        'flavor_text',
-        'flavorText',
-        'summary'
-      ]);
-
-      const largeImage = pickSprite(entry, true);
-
-      return {
-        id,
-        name,
-        description,
-        image: sprite,
-        imageLarge: largeImage || sprite,
-      };
-    }
-
-    function pickFirstValue(entry, keys) {
-      for (const key of keys) {
-        if (Object.prototype.hasOwnProperty.call(entry, key)) {
-          const value = entry[key];
-          if (value === undefined || value === null) {
-            continue;
-          }
-
-          if (typeof value === 'string') {
-            const trimmed = value.trim();
-            if (trimmed) {
-              return trimmed;
-            }
-            continue;
-          }
-
-          return value;
-        }
-      }
-      return null;
-    }
-
-    function pickFirstString(entry, keys) {
-      const value = pickFirstValue(entry, keys);
-      return typeof value === 'string' ? value : '';
-    }
-
-    function pickSprite(entry, preferLarge = false) {
-      const primarySources = preferLarge
-        ? [
-            'officialArtwork',
-            'artwork',
-            'image',
-            'imageUrl',
-            'imageURL',
-            'thumbnailImage',
-            'thumbnail',
-            'sprite',
-            'Sprite'
-          ]
-        : [
-            'sprite',
-            'Sprite',
-            'sprite_url',
-            'spriteUrl',
-            'spriteURL',
-            'thumbnail',
-            'thumbnailImage',
-            'image',
-            'imageUrl',
-            'imageURL',
-            'picture'
-          ];
-
-      const spriteCandidates = [pickFirstString(entry, primarySources)];
-
-      if (entry.sprites && typeof entry.sprites === 'object') {
-        const baseSprites = [entry.sprites.front_default, entry.sprites.front_shiny];
-        const officialArtwork = [
-          entry.sprites.other?.['official-artwork']?.front_default,
-          entry.sprites.other?.home?.front_default,
-          entry.sprites.other?.dream_world?.front_default
-        ];
-        spriteCandidates.push(...(preferLarge ? officialArtwork.concat(baseSprites) : baseSprites.concat(officialArtwork)));
-      }
-
-      if (entry.images && typeof entry.images === 'object') {
-        const { images } = entry;
-        const imageGroup = [images.hires, images.large, images.profile, images.sprite, images.icon, images.thumbnail];
-        spriteCandidates.push(...(preferLarge ? imageGroup : imageGroup.reverse()));
-      }
-
-      if (entry.sprite && typeof entry.sprite === 'object') {
-        const { sprite } = entry;
-        const spriteGroup = [sprite.hires, sprite.large, sprite.default, sprite.regular, sprite.normal, sprite.front];
-        spriteCandidates.push(...(preferLarge ? spriteGroup : spriteGroup.reverse()));
-      }
-
-      if (entry.assets && typeof entry.assets === 'object') {
-        const { assets } = entry;
-        const assetsGroup = [assets.artwork, assets.image, assets.sprite, assets.icon];
-        spriteCandidates.push(...(preferLarge ? assetsGroup : assetsGroup.reverse()));
-      }
-
-      if (entry.art && typeof entry.art === 'object') {
-        const artGroup = [entry.art.official, entry.art.home, entry.art.thumbnail];
-        spriteCandidates.push(...(preferLarge ? artGroup : artGroup.reverse()));
-      }
-
-      if (entry.images?.['official-artwork']) {
-        spriteCandidates.push(entry.images['official-artwork']);
-      }
-
-      spriteCandidates.push(entry.hires, entry.largeImage, entry.largeSprite);
-
-      const cleaned = spriteCandidates
-        .map(url => (typeof url === 'string' ? url.trim() : ''))
-        .filter(Boolean);
-
-      return cleaned[0] || '';
-    }
-
-    function extractPokemonEntries(data) {
-      if (!data) {
-        return [];
-      }
-
-      if (Array.isArray(data)) {
-        return data;
-      }
-
-      const candidateKeys = ['pokemon', 'results', 'data', 'pokedex', 'entries'];
-      for (const key of candidateKeys) {
-        if (Array.isArray(data[key])) {
-          return data[key];
-        }
-      }
-
-      return [];
-    }
-
-    function deduplicatePokemon(pokemonList) {
-      const map = new Map();
-      pokemonList.forEach(pokemon => {
-        if (!pokemon || !pokemon.name) {
-          return;
-        }
-        const key = pokemon.name.toLowerCase();
-        if (!map.has(key)) {
-          map.set(key, pokemon);
-        }
-      });
-      return Array.from(map.values());
-    }
-
-    async function fetchPokemonData() {
-      let lastError = null;
-
-      for (const url of DATA_SOURCES) {
-        try {
-          const response = await fetch(url, { mode: 'cors' });
-          if (!response.ok) {
-            throw new Error(`Request failed with status ${response.status}`);
-          }
-          const data = await response.json();
-          const entries = extractPokemonEntries(data);
-          const normalised = entries
-            .map((entry, index) => normalisePokemon(entry, index))
-            .filter(Boolean);
-          if (normalised.length > 0) {
-            return normalised;
-          }
-        } catch (error) {
-          lastError = error;
-        }
-      }
-
-      throw lastError || new Error('Unable to load Pokémon data.');
-    }
-
-    async function loadPokemon() {
-      try {
-        const pokemonList = await fetchPokemonData();
-        allPokemon = deduplicatePokemon(pokemonList).sort((a, b) => a.name.localeCompare(b.name));
-        statusMessage.textContent = 'Pick a letter to explore Pokémon.';
-        renderPokemon();
-      } catch (error) {
-        console.error(error);
-        statusMessage.textContent = 'Unable to load Pokémon from nationalpokedex.github.io. Please try again later.';
-      } finally {
-        pokemonGrid.setAttribute('aria-busy', 'false');
-      }
-    }
-
-    renderLetters();
-    loadPokemon();
   </script>
 </body>
 </html>
