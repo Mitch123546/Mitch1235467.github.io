@@ -1,0 +1,350 @@
+:root {
+  color-scheme: light dark;
+  --background: #f5f7fb;
+  --foreground: #101328;
+  --accent: #ff4755;
+  --card-bg: rgba(255, 255, 255, 0.85);
+  --card-border: rgba(16, 19, 40, 0.1);
+  --shadow: 0 10px 30px rgba(16, 19, 40, 0.12);
+  --font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  background: linear-gradient(160deg, #e0ecff 0%, #fff7f0 100%);
+  color: var(--foreground);
+  min-height: 100vh;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+.page-header {
+  background: radial-gradient(circle at 20% 20%, rgba(255, 71, 85, 0.25), transparent 60%),
+    radial-gradient(circle at 80% 10%, rgba(255, 209, 102, 0.3), transparent 55%),
+    radial-gradient(circle at 50% 70%, rgba(110, 200, 255, 0.35), transparent 60%);
+  padding: 4rem 1.5rem 3rem;
+  text-align: center;
+}
+
+.header-content {
+  margin: 0 auto;
+  max-width: 720px;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2.5rem, 5vw, 3.5rem);
+  letter-spacing: 0.04em;
+}
+
+.header-content p {
+  margin-top: 1rem;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: rgba(16, 19, 40, 0.8);
+}
+
+.data-source-note {
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+  color: rgba(16, 19, 40, 0.65);
+  font-style: italic;
+}
+
+.data-source-note a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration-color: rgba(255, 71, 85, 0.6);
+  text-decoration-thickness: 2px;
+}
+
+.data-source-note a:hover,
+.data-source-note a:focus-visible {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+
+main {
+  padding: 0 1.5rem 4rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.alphabet-filter {
+  margin-top: -2.5rem;
+  margin-bottom: 2.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.letter-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(42px, 1fr));
+  gap: 0.45rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: var(--shadow);
+}
+
+.letter-button {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  padding: 0.65rem 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(16, 19, 40, 0.75);
+  background: rgba(16, 19, 40, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  cursor: pointer;
+}
+
+.letter-button:hover,
+.letter-button:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(16, 19, 40, 0.2);
+}
+
+.letter-button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 20px rgba(255, 71, 85, 0.35);
+}
+
+.status {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.status p {
+  margin: 0;
+  font-size: 1rem;
+  color: rgba(16, 19, 40, 0.7);
+}
+
+.pokemon-sections {
+  display: grid;
+  gap: 2.5rem;
+}
+
+.letter-section {
+  display: none;
+}
+
+.letter-section:not([hidden]) {
+  display: block;
+}
+
+.letter-heading {
+  margin: 0 0 1.25rem;
+  font-size: 2rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(16, 19, 40, 0.75);
+}
+
+.pokemon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1.5rem;
+}
+
+.pokemon-card {
+  background: var(--card-bg);
+  border-radius: 1.25rem;
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: transform 0.25s ease;
+}
+
+.card-button {
+  width: 100%;
+  padding: 1.25rem 1rem 1.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.card-button img {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 18px rgba(16, 19, 40, 0.2));
+}
+
+.card-button:focus-visible {
+  outline: 3px solid rgba(255, 71, 85, 0.4);
+  outline-offset: 4px;
+}
+
+.pokemon-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+
+.pokemon-sprite {
+  font-size: 0.85rem;
+  color: rgba(16, 19, 40, 0.65);
+  word-break: break-word;
+}
+
+.empty-letter {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 1rem;
+  color: rgba(16, 19, 40, 0.6);
+}
+
+.pokemon-card:hover {
+  transform: translateY(-6px);
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 19, 40, 0.4);
+  backdrop-filter: blur(2px);
+}
+
+.modal-dialog {
+  position: relative;
+  background: linear-gradient(135deg, #ffffff 0%, #f0f4ff 100%);
+  border-radius: 1.5rem;
+  box-shadow: 0 20px 60px rgba(16, 19, 40, 0.25);
+  max-width: 640px;
+  width: min(90vw, 640px);
+  padding: 2.5rem 2rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.modal-close {
+  position: absolute;
+  top: 1.2rem;
+  right: 1.2rem;
+  border: none;
+  background: rgba(16, 19, 40, 0.05);
+  color: rgba(16, 19, 40, 0.8);
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.modal-close:hover,
+.modal-close:focus-visible {
+  background: rgba(255, 71, 85, 0.2);
+}
+
+.modal-content {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  text-align: center;
+}
+
+.modal-content img {
+  width: clamp(160px, 40vw, 220px);
+  height: clamp(160px, 40vw, 220px);
+  object-fit: contain;
+}
+
+.modal-text h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.2rem);
+}
+
+.modal-text p {
+  margin: 1rem 0 0;
+  line-height: 1.7;
+  color: rgba(16, 19, 40, 0.75);
+}
+
+@media (max-width: 640px) {
+  .pokemon-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .card-button {
+    padding: 1rem 0.75rem 1.5rem;
+  }
+
+  .letter-list {
+    grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0c101d;
+    --foreground: #f7f9ff;
+    --card-bg: rgba(12, 16, 29, 0.92);
+    --card-border: rgba(247, 249, 255, 0.05);
+    --shadow: 0 12px 30px rgba(5, 8, 20, 0.55);
+  }
+
+  body {
+    background: radial-gradient(circle at 15% 20%, rgba(255, 71, 85, 0.2), transparent 55%),
+      radial-gradient(circle at 90% 10%, rgba(110, 200, 255, 0.25), transparent 55%),
+      linear-gradient(160deg, #050914 0%, #111c33 100%);
+    color: var(--foreground);
+  }
+
+  .letter-button {
+    color: rgba(247, 249, 255, 0.75);
+    background: rgba(247, 249, 255, 0.08);
+  }
+
+  .letter-button.active {
+    color: #fff;
+  }
+
+  .status p {
+    color: rgba(247, 249, 255, 0.7);
+  }
+
+  .card-button img {
+    filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.6));
+  }
+
+  .modal-dialog {
+    background: linear-gradient(135deg, rgba(17, 28, 51, 0.95) 0%, rgba(5, 9, 20, 0.95) 100%);
+  }
+
+  .modal-text p {
+    color: rgba(247, 249, 255, 0.8);
+  }
+}

@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokédex Explorer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="page-header">
+    <div class="header-content">
+      <h1>Pokédex Explorer</h1>
+      <p>Select a letter to browse Pokémon in alphabetical order. Click a Pokémon to learn more about it.</p>
+      <p class="data-source-note">
+        Sprites and names are loaded live from the
+        <a
+          href="https://docs.google.com/spreadsheets/d/1Ztwd5eOBTR9cTB-hp8n9741vjMGcLeHUvtubXzjeZZ8/edit?gid=1085653177"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          community Google Sheet Pokédex
+        </a>.
+      </p>
+    </div>
+  </header>
+
+  <main>
+    <section class="alphabet-filter" aria-label="Alphabetical filter">
+      <div class="letter-list" id="letter-list"></div>
+    </section>
+
+    <section class="status" aria-live="polite">
+      <p id="status-message">Loading Pokédex data from Google Sheets…</p>
+    </section>
+
+    <section
+      class="pokemon-sections"
+      id="pokemon-sections"
+      aria-live="polite"
+      aria-busy="true"
+    ></section>
+  </main>
+
+  <div class="modal" id="pokemon-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <button class="modal-close" id="modal-close" aria-label="Close details">&times;</button>
+      <div class="modal-content">
+        <img id="modal-image" src="" alt="" />
+        <div class="modal-text">
+          <h2 id="modal-title"></h2>
+          <p id="modal-description"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <template id="pokemon-card-template">
+    <article class="pokemon-card" role="listitem">
+      <button type="button" class="card-button">
+        <img loading="lazy" />
+        <span class="pokemon-name"></span>
+        <span class="pokemon-sprite"></span>
+      </button>
+    </article>
+  </template>
+
+  <script>
+    const DATA_SOURCES = [
+      {
+        url:
+          'https://docs.google.com/spreadsheets/d/1Ztwd5eOBTR9cTB-hp8n9741vjMGcLeHUvtubXzjeZZ8/gviz/tq?tqx=out:json&gid=1085653177',
+        type: 'gviz'
+      },
+      {
+        url:
+          'https://docs.google.com/spreadsheets/d/1Ztwd5eOBTR9cTB-hp8n9741vjMGcLeHUvtubXzjeZZ8/export?format=csv&gid=1085653177',
+        type: 'csv'
+      }
+    ];
+
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+    const NAME_KEYS = [
+      'name',
+      'pokemon',
+      'pokemon_name',
+      'Pokemon',
+      'Pokemon Name',
+      'pokemon name',
+      'species',
+      'title'
+    ];
+
+    const SPRITE_KEYS = [
+      'sprite',
+      'Sprite',
+      'sprite_url',
+      'Sprite URL',
+      'sprite url',
+      'spriteUrl',
+      'spriteURL',
+      'thumbnail',
+      'thumbnailImage',
+      'image',
+      'imageUrl',
+      'imageURL',
+      'Sprite Link',
+      'sprite link',
+      'picture'
+    ];
+
+    const SPRITE_FILE_NAME_KEYS = [
+      'spriteFileName',
+      'sprite_filename',
+      'sprite file name',
+      'Sprite File Name',
+      'spriteFile',
+      'sprite_file',
+      'Sprite File',
+      'sprite pdf file',
+      'sprite_pdf_file',
+      'Sprite PDF',
+      'sprite pdf',
+      'pdf file name'
+    ];
+
+    const DESCRIPTION_KEYS = [
+      'description',
+      'Description',
+      'info',
+      'Info',
+      'about',
+      'bio',
+      'flavor_text',
+      'flavorText',
+      'summary',
+      'Dex Entry',
+      'dex_entry'
+    ];
+
+    const ID_KEYS = [
+      'national_dex',
+      'nationalDex',
+      'nationalDexNumber',
+      'dexNumber',
+      'pokedexNumber',
+      'number',
+      'id',
+      'slug',
+      'Dex #',
+      'dex #',
+      'dex_number',
+      'Dex Number'
+    ];
+    const letterList = document.getElementById('letter-list');
+    const pokemonSections = document.getElementById('pokemon-sections');
+    const statusMessage = document.getElementById('status-message');
+    const cardTemplate = document.getElementById('pokemon-card-template');
+
+    const modal = document.getElementById('pokemon-modal');
+    const modalBackdrop = document.getElementById('modal-backdrop');
+    const modalClose = document.getElementById('modal-close');
+    const modalImage = document.getElementById('modal-image');
+    const modalTitle = document.getElementById('modal-title');
+    const modalDescription = document.getElementById('modal-description');
+
+    const letterSectionMap = new Map();
+    let allPokemon = [];
+    let currentLetter = 'A';
+
+    function renderLetters() {
+      letters.forEach(letter => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'letter-button';
+        button.textContent = letter;
+        button.setAttribute('aria-label', `Show Pokémon starting with ${letter}`);
+        button.setAttribute('aria-controls', `letter-section-${letter}`);
+        button.addEventListener('click', () => {
+          currentLetter = letter;
+          updateLetterSelection();
+          showLetterSection(letter, { scroll: true });
+          updateStatusForLetter(letter);
+        });
+        letterList.appendChild(button);
+      });
+      updateLetterSelection();
+    }
+
+    function updateLetterSelection() {
+      const buttons = letterList.querySelectorAll('.letter-button');
+      buttons.forEach(btn => {
+        const isActive = btn.textContent === currentLetter;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-pressed', isActive);
+      });
+    }
+
+    function normaliseHeaderKey(header) {
+      return String(header || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    }
+
+    function attachRecordValue(record, key, value) {
+      if (!key) {
+        return;
+      }
+      const trimmedKey = String(key).trim();
+      if (!trimmedKey) {
+        return;
+      }
+      if (!Object.prototype.hasOwnProperty.call(record, trimmedKey)) {
+        record[trimmedKey] = value;
+      }
+    }
+
+    function parseGoogleSheetResponse(text) {
+      const match = text.match(/setResponse\((.*)\);?\s*$/s);
+      if (!match) {
+        return [];
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(match[1]);
+      } catch (error) {
+        return [];
+      }
+
+      const table = payload?.table;
+      if (!table || !Array.isArray(table.cols) || !Array.isArray(table.rows)) {
+        return [];
+      }
+
+      const rawHeaders = table.cols.map(col => col.label || col.id || '');
+      const normalisedHeaders = rawHeaders.map(normaliseHeaderKey);
+
+      return table.rows
+        .map(row => {
+          if (!row || !Array.isArray(row.c)) {
+            return null;
+          }
+          const record = {};
+          row.c.forEach((cell, index) => {
+            const rawKey = rawHeaders[index];
+            const normalisedKey = normalisedHeaders[index];
+            if (!rawKey && !normalisedKey) {
+              return;
+            }
+            const value = cell?.v ?? cell?.f ?? '';
+            const resolved = typeof value === 'string' ? value.trim() : value;
+            attachRecordValue(record, rawKey, resolved);
+            attachRecordValue(record, normalisedKey, resolved);
+          });
+          return Object.keys(record).length ? record : null;
+        })
+        .filter(Boolean);
+    }
+
+    function parseCsv(text) {
+      const rows = [];
+      let field = '';
+      let inQuotes = false;
+      let row = [];
+
+      for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        if (char === '"') {
+          if (inQuotes && text[i + 1] === '"') {
+            field += '"';
+            i += 1;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          row.push(field);
+          field = '';
+        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+          if (char === '\r' && text[i + 1] === '\n') {
+            i += 1;
+          }
+          row.push(field);
+          rows.push(row);
+          row = [];
+          field = '';
+        } else {
+          field += char;
+        }
+      }
+
+      if (field.length > 0 || row.length > 0) {
+        row.push(field);
+        rows.push(row);
+      }
+
+      if (!rows.length) {
+        return [];
+      }
+
+      const headers = rows.shift().map(header => header.trim());
+      return rows
+        .map(values => {
+          if (!values.length) {
+            return null;
+          }
+          const record = {};
+          headers.forEach((header, index) => {
+            const value = values[index] ?? '';
+            const trimmedValue = typeof value === 'string' ? value.trim() : value;
+            attachRecordValue(record, header, trimmedValue);
+            attachRecordValue(record, normaliseHeaderKey(header), trimmedValue);
+          });
+          return Object.keys(record).length ? record : null;
+        })
+        .filter(Boolean);
+    }
+
+    function parseSourceByType(type, text) {
+      if (type === 'gviz') {
+        return parseGoogleSheetResponse(text);
+      }
+      if (type === 'csv') {
+        return parseCsv(text);
+      }
+
+      try {
+        const data = JSON.parse(text);
+        return extractPokemonEntries(data);
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function showPokemonDetails(pokemon) {
+      modalImage.src = pokemon.imageLarge || pokemon.image;
+      modalImage.alt = pokemon.name;
+      modalTitle.textContent = pokemon.name;
+      modalDescription.textContent =
+        pokemon.description || 'No description available from the Google Sheet Pokédex.';
+
+      modal.hidden = false;
+      document.body.classList.add('modal-open');
+      modalClose.focus();
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      document.body.classList.remove('modal-open');
+    }
+
+    modalBackdrop.addEventListener('click', closeModal);
+    modalClose.addEventListener('click', closeModal);
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !modal.hidden) {
+        closeModal();
+      }
+    });
+
+    function createLetterSections() {
+      const fragment = document.createDocumentFragment();
+
+      letters.forEach(letter => {
+        const section = document.createElement('section');
+        section.className = 'letter-section';
+        section.id = `letter-section-${letter}`;
+        section.dataset.letter = letter;
+        section.hidden = letter !== currentLetter;
+        section.setAttribute('aria-labelledby', `heading-${letter}`);
+        section.tabIndex = -1;
+
+        const heading = document.createElement('h2');
+        heading.className = 'letter-heading';
+        heading.id = `heading-${letter}`;
+        heading.textContent = letter;
+
+        const grid = document.createElement('div');
+        grid.className = 'pokemon-grid';
+        grid.setAttribute('role', 'list');
+        grid.setAttribute('aria-labelledby', heading.id);
+
+        section.appendChild(heading);
+        section.appendChild(grid);
+        fragment.appendChild(section);
+        letterSectionMap.set(letter, { section, grid });
+      });
+
+      pokemonSections.appendChild(fragment);
+    }
+
+    function createPokemonCard(pokemon) {
+      const card = cardTemplate.content.firstElementChild.cloneNode(true);
+      const button = card.querySelector('.card-button');
+      const img = card.querySelector('img');
+      const nameEl = card.querySelector('.pokemon-name');
+      const spriteEl = card.querySelector('.pokemon-sprite');
+
+      nameEl.textContent = pokemon.name;
+      img.src = pokemon.image;
+      img.alt = `${pokemon.name}`;
+
+      const spriteFileName = pokemon.spriteFileName || getSpriteFileName(pokemon.image);
+      spriteEl.textContent = spriteFileName ? `Sprite: ${spriteFileName}` : 'Sprite unavailable';
+
+      if (spriteFileName) {
+        const spriteId = getSpriteElementId(pokemon);
+        spriteEl.id = spriteId;
+        button.setAttribute('aria-describedby', spriteId);
+      }
+
+      button.addEventListener('click', () => showPokemonDetails(pokemon));
+
+      return card;
+    }
+
+    function populateLetterSections() {
+      letters.forEach(letter => {
+        const entry = letterSectionMap.get(letter);
+        if (!entry) {
+          return;
+        }
+
+        const { grid } = entry;
+        grid.innerHTML = '';
+
+        const filtered = getPokemonByLetter(letter);
+
+        if (filtered.length === 0) {
+          const emptyMessage = document.createElement('p');
+          emptyMessage.className = 'empty-letter';
+          emptyMessage.textContent = `No Pokémon found for the letter ${letter}.`;
+          grid.appendChild(emptyMessage);
+          return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        filtered.forEach(pokemon => {
+          fragment.appendChild(createPokemonCard(pokemon));
+        });
+
+        grid.appendChild(fragment);
+      });
+    }
+
+    function showLetterSection(letter, { scroll = false } = {}) {
+      let targetSection = null;
+      letterSectionMap.forEach(({ section }, key) => {
+        const isTarget = key === letter;
+        section.hidden = !isTarget;
+        if (isTarget) {
+          targetSection = section;
+        }
+      });
+
+      if (scroll && targetSection) {
+        try {
+          targetSection.focus({ preventScroll: true });
+        } catch (error) {
+          targetSection.focus();
+        }
+        targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    function getPokemonByLetter(letter) {
+      return allPokemon.filter(pokemon => getInitialLetter(pokemon.name) === letter);
+    }
+
+    function updateStatusForLetter(letter) {
+      const filtered = getPokemonByLetter(letter);
+      if (filtered.length === 0) {
+        statusMessage.textContent = `No Pokémon found for the letter ${letter}.`;
+        return;
+      }
+
+      statusMessage.textContent = `Showing ${filtered.length} Pokémon starting with ${letter}.`;
+    }
+
+    function getSpriteFileName(url) {
+      if (!url || typeof url !== 'string') {
+        return '';
+      }
+
+      try {
+        const cleaned = url.split('?')[0];
+        const fileName = cleaned.substring(cleaned.lastIndexOf('/') + 1);
+        return fileName || '';
+      } catch (error) {
+        return '';
+      }
+    }
+
+    function getInitialLetter(name) {
+      if (typeof name !== 'string') {
+        return '#';
+      }
+
+      const match = name.toUpperCase().match(/[A-Z]/);
+      return match ? match[0] : '#';
+    }
+
+    function getSpriteElementId(pokemon) {
+      const baseValue = pokemon.id ?? pokemon.name ?? 'pokemon';
+      const normalised = String(baseValue)
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-');
+      const trimmed = normalised.replace(/^-+|-+$/g, '');
+      return `sprite-${trimmed || 'entry'}`;
+    }
+
+    function normalisePokemon(entry, index) {
+      let name = pickFirstString(entry, NAME_KEYS);
+
+      if (!name && entry.names && typeof entry.names === 'object') {
+        name = pickFirstString(entry.names, ['english', 'en', 'default', 'name']);
+      }
+
+      if (!name) {
+        return null;
+      }
+
+      const sprite = pickSprite(entry);
+      if (!sprite) {
+        return null;
+      }
+
+      const id = pickFirstValue(entry, ID_KEYS) || index;
+
+      const spriteFileName = pickFirstString(entry, SPRITE_FILE_NAME_KEYS) || getSpriteFileName(sprite);
+
+      const description = pickFirstString(entry, DESCRIPTION_KEYS);
+
+      const largeImage = pickSprite(entry, true);
+
+      return {
+        id,
+        name,
+        description,
+        image: sprite,
+        imageLarge: largeImage || sprite,
+        spriteFileName,
+      };
+    }
+
+    function pickFirstValue(entry, keys) {
+      for (const key of keys) {
+        if (Object.prototype.hasOwnProperty.call(entry, key)) {
+          const value = entry[key];
+          if (value === undefined || value === null) {
+            continue;
+          }
+
+          if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed) {
+              return trimmed;
+            }
+            continue;
+          }
+
+          return value;
+        }
+      }
+      return null;
+    }
+
+    function pickFirstString(entry, keys) {
+      const value = pickFirstValue(entry, keys);
+      return typeof value === 'string' ? value : '';
+    }
+
+    function pickSprite(entry, preferLarge = false) {
+      const primarySources = preferLarge
+        ? [
+            'officialArtwork',
+            'artwork',
+            'image',
+            'imageUrl',
+            'imageURL',
+            'Sprite URL',
+            'sprite url',
+            'Sprite Link',
+            'sprite link',
+            'spriteImage',
+            'sprite image',
+            'thumbnailImage',
+            'thumbnail',
+            'sprite',
+            'Sprite'
+          ]
+        : [
+            'sprite',
+            'Sprite',
+            'sprite_url',
+            'spriteUrl',
+            'spriteURL',
+            'Sprite URL',
+            'sprite url',
+            'Sprite Link',
+            'sprite link',
+            'spriteImage',
+            'sprite image',
+            'thumbnail',
+            'thumbnailImage',
+            'image',
+            'imageUrl',
+            'imageURL',
+            'picture'
+          ];
+
+      const combinedSources = [...new Set([...primarySources, ...SPRITE_KEYS])];
+      const spriteCandidates = [pickFirstString(entry, combinedSources)];
+
+      if (entry.sprites && typeof entry.sprites === 'object') {
+        const baseSprites = [entry.sprites.front_default, entry.sprites.front_shiny];
+        const officialArtwork = [
+          entry.sprites.other?.['official-artwork']?.front_default,
+          entry.sprites.other?.home?.front_default,
+          entry.sprites.other?.dream_world?.front_default
+        ];
+        spriteCandidates.push(...(preferLarge ? officialArtwork.concat(baseSprites) : baseSprites.concat(officialArtwork)));
+      }
+
+      if (entry.images && typeof entry.images === 'object') {
+        const { images } = entry;
+        const imageGroup = [images.hires, images.large, images.profile, images.sprite, images.icon, images.thumbnail];
+        spriteCandidates.push(...(preferLarge ? imageGroup : imageGroup.reverse()));
+      }
+
+      if (entry.sprite && typeof entry.sprite === 'object') {
+        const { sprite } = entry;
+        const spriteGroup = [sprite.hires, sprite.large, sprite.default, sprite.regular, sprite.normal, sprite.front];
+        spriteCandidates.push(...(preferLarge ? spriteGroup : spriteGroup.reverse()));
+      }
+
+      if (entry.assets && typeof entry.assets === 'object') {
+        const { assets } = entry;
+        const assetsGroup = [assets.artwork, assets.image, assets.sprite, assets.icon];
+        spriteCandidates.push(...(preferLarge ? assetsGroup : assetsGroup.reverse()));
+      }
+
+      if (entry.art && typeof entry.art === 'object') {
+        const artGroup = [entry.art.official, entry.art.home, entry.art.thumbnail];
+        spriteCandidates.push(...(preferLarge ? artGroup : artGroup.reverse()));
+      }
+
+      if (entry.images?.['official-artwork']) {
+        spriteCandidates.push(entry.images['official-artwork']);
+      }
+
+      spriteCandidates.push(entry.hires, entry.largeImage, entry.largeSprite);
+
+      const cleaned = spriteCandidates
+        .map(url => (typeof url === 'string' ? url.trim() : ''))
+        .filter(Boolean);
+
+      return cleaned[0] || '';
+    }
+
+    function extractPokemonEntries(data) {
+      if (!data) {
+        return [];
+      }
+
+      if (Array.isArray(data)) {
+        return data;
+      }
+
+      const candidateKeys = ['pokemon', 'results', 'data', 'pokedex', 'entries'];
+      for (const key of candidateKeys) {
+        if (Array.isArray(data[key])) {
+          return data[key];
+        }
+      }
+
+      return [];
+    }
+
+    function deduplicatePokemon(pokemonList) {
+      const map = new Map();
+      pokemonList.forEach(pokemon => {
+        if (!pokemon || !pokemon.name) {
+          return;
+        }
+        const key = pokemon.name.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, pokemon);
+        }
+      });
+      return Array.from(map.values());
+    }
+
+    async function fetchPokemonData() {
+      let lastError = null;
+
+      for (const source of DATA_SOURCES) {
+        const { url, type } = typeof source === 'string' ? { url: source } : source;
+        if (!url) {
+          continue;
+        }
+
+        try {
+          const response = await fetch(url, { mode: 'cors' });
+          if (!response.ok) {
+            throw new Error(`Request failed with status ${response.status}`);
+          }
+
+          const text = await response.text();
+          const rawEntries = parseSourceByType(type, text);
+          const entries = Array.isArray(rawEntries) ? rawEntries : [];
+          const normalised = entries
+            .map((entry, index) => normalisePokemon(entry, index))
+            .filter(Boolean);
+
+          if (normalised.length > 0) {
+            return normalised;
+          }
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('Unable to load Pokémon data.');
+    }
+
+    async function loadPokemon() {
+      try {
+        const pokemonList = await fetchPokemonData();
+        allPokemon = deduplicatePokemon(pokemonList).sort((a, b) => a.name.localeCompare(b.name));
+        populateLetterSections();
+        showLetterSection(currentLetter);
+        statusMessage.textContent = 'Pick a letter to explore Pokémon from the Google Sheet Pokédex.';
+        updateStatusForLetter(currentLetter);
+      } catch (error) {
+        console.error(error);
+        statusMessage.textContent = 'Unable to load Pokémon from the Google Sheet Pokédex. Please try again later.';
+      } finally {
+        pokemonSections.setAttribute('aria-busy', 'false');
+      }
+    }
+
+    renderLetters();
+    createLetterSections();
+    showLetterSection(currentLetter);
+    loadPokemon();
+  </script>
+</body>
+</html>
